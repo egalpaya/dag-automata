@@ -1,0 +1,1314 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is
+% strongly recommended.
+\pdfoutput=1
+% In particular, the hyperref package requires pdfLaTeX in order to break URLs
+% across lines.
+
+\documentclass[11pt]{article}
+
+% Remove the "review" option to generate the final version.
+\usepackage[]{ACL2023} 
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage{hyperref}
+\usepackage{tikz-cd}
+% For proper rendering and hyphenation of words containing Latin characters
+% (including in bib files)
+\usepackage[T1]{fontenc}
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out. However, it will
+% improve the layout of the manuscript, and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out. However, it
+% will improve the aesthetics of text in the typewriter font.
+\usepackage{inconsolata}
+
+
+\input{egalpaya_defs}
+% If the title and author information does not fit in the area allocated,
+% uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+\setcitestyle{numbers,square}
+
+\title{Analysis and Properties of Weighted DAG Automata}
+
+
+\author{ Eishitha Galpayage Don \\
+  ETH Zurich \\
+  \texttt{egalpayage@student.ethz.ch} \\}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+In this paper, we study the weighted DAG automata of \citet{chiang2018weighted},
+a recent formalism proposed to model semantic graphs. \citet{blum2019properties}
+establish many properties and algorithms of these automata for the unweighted
+case, such as closure properties, determinisation and minimisation. However,
+generalisations to the weighted case remains an open area of research, and this
+paper aims to start addressing these gaps. Indeed, algorithms and properties for
+weighted automata are important for future practical applications, such as the
+construction of probability models and inferences. In this paper, we will
+formalise and prove the recognition algorithm of \cite{chiang2018weighted}, give
+algorithms for computing the weighted intersection and union, as well as provide
+a set of definitions and analysis methods in line with existing literature on
+weighted automata. 
+\end{abstract}
+
+\section{Introduction}
+String languages, grammars and automata have been extensively studied for
+decades, with standardised definitions, properties and algorithms. A core
+motivator of such research is the widespread applicability to language syntax
+and parsing, for both programming and natural languages. However, another
+important goal is the modeling of semantics. For instance, how do we represent
+the meaning of an English sentence? Abstract meaning representation
+\cite{banarescu2013abstract} is a potential way of modelling meaning via
+semantic graphs. Formally, these semantic graphs are labelled, directed, acyclic
+graphs (DAGs). In order to describe and parse such structures, we require
+formalisms for DAG languages, of which many have been proposed
+\cite{kamimura1981parallel, quernheim2012dagger, priese2007finite}, each with
+various idiosyncrasies.
+
+The main goal of this project is to investigate theoretical properties and
+algorithms admitted by weighted Directed Acyclic Graph (DAG) languages and
+automata. The existing literature for weighted automata over strings and trees
+share many common ideas and concepts. For instance, forward and backward
+weights have been defined for both string and tree automata, representing
+essentially the sum of paths leading to or emanating from a given state. This
+allows us to compute marginals for transitions, and convert the weight
+distribution of transitions emanating from a state into a probability
+distribution. Such concepts have applications in machine learning and
+probabilistic inference. \cite{chiang2018weighted} outlines a related notion of
+`partial analysis' for nodes in a DAG, and we aim to formalise this in a similar
+fashion to forward and backward weights. 
+
+There exists ample evidence in the literature to demonstrate that this topic is
+still present in contemporary research and there is some potential for extending
+the existing frameworks. For example, \citeauthor{blum2019properties} explores
+language-theoretic properties of DAG languages and provide an explicit analysis
+of \citeauthor{chiang2018weighted}'s formalism. In general however, the papers
+focused on the unweighted
+case. One of our aims is to begin the process of generalising these results and
+definitions to the weighted
+case.
+
+\section{Literature review}
+
+\subsection{Semantic Graphs}
+The Penn Treebank is a corpus of English natural language sentences paired with
+syntactic trees, and is widely used in syntactic modelling. However, the
+semantics of a sentence often involves more complex relations that cannot be
+modelled as simple rooted trees. Abstract Meaning Representation
+\cite{banarescu2013abstract} is an attempt to formalise a system for semantic
+representation, in which thousands of English sentences are broken down into
+their semantics and expressed as a semantic graph. Semantic graphs as used in
+AMR are specified as rooted, directed, acyclic graphs
+with both node (leaf) and edge labels
+\footnote{\url{https://www.isi.edu/~ulf/amr/help/amr-guidelines.pdf}}. It also
+aims to be independent of syntax, e.g ``he described her as a genius'' has an
+identical semantic graph to ``she was a genius according to his description''. 
+
+\subsection{DAG Automata and Grammars}
+The concepts of DAG automata and grammars have existed for a while, the most
+cited being those of \citet{kamimura1981parallel}, \citet{quernheim2012dagger},
+and \citet{priese2007finite}. These have all been born out of different needs
+and use cases, and as such have quite different properties. For instance, the
+formalism of \cite{kamimura1981parallel} recognises only planar DAGs, and is
+hence unsuitable for modelling semantic graphs. 
+
+More recently, there have been two main formalisms proposed specifically with
+semantic modelling in mind. These are the weighted DAG automata of
+\cite{chiang2018weighted}, which are studied in this paper, and the order
+preserving DAG grammars of \cite{ericson2019order}. The formalisms differ in
+that the DAG automata recognise only vertex labelled
+graphs, while OPDGs generate edge labelled hypergraphs, but both
+formalisms provide simple transformations converting to and from semantic
+graphs. 
+
+\subsubsection{Weighted DAG Automata}
+The seminal paper by \cite{chiang2018weighted} describes the DAG automaton
+as a simplified version of the formalism proposed by
+\cite{quernheim2012dagger}. Most notably, the authors provide proofs of a
+number of properties. For instance, they posit that path languages of DAG
+automata are regular under the constraint that there exist multiple roots.
+Furthermore, they demonstrate that hyperedge replacement graph languages are
+closed under intersection with languages recognised by DAG automata. They also
+show that testing for emptiness of DAG automata is decidable under the
+definition assumed in the present paper, but not under the original definition
+by \cite{kamimura1981parallel}, and that general recognition is
+NP-complete, even in the non-uniform case (via a reduction from SAT). It is also
+interesting to mention that the authors define `extended weighted DAG automata',
+which allow rules that can process nodes with unbounded degree. Essentially,
+these rules/transitions use a form of regular expressions to match structures.
+
+\cite{blum2019properties} then analyses the language theoretic properties of
+these unweighted DAG automata. Namely, they show that recognisable/regular DAG languages
+(DAG languages recognised by DAG automata) are closed under union and
+intersection, but not under complement. It is also shown that deterministic DAG
+automata are strictly less powerful than their nondeterministic counterparts. A
+pumping lemma is then presented for regular DAG languages, as well as a
+characterisation of infinite DAG languages in terms of cyclic automata. 
+
+Finally, for deterministic DAG automata, \cite{blum2019properties} presents a
+definition of equivalent and distinguishable states, a minimisation procedure,
+and a polynomial time method for computing the equivalence of deterministic DAG
+automata. 
+
+\subsubsection{Order Preserving DAG Grammars}
+Weighted order-preserving DAG grammars
+(WOPDGs) on the other hand are a generative model.
+
+The formalism for OPDGs introduced by \cite{ericson2019order} is based on
+introducing several constraints on the original definition of weighted DAG
+grammars. OPDGs have been subsequently studied in a series of papers. For
+instance, \cite{ericson1opdl} gives a polynomial time algorithm for parsing
+OPDGs and mention NP-hard result for grammars obeying a subset of the original
+restrictions. \cite{ericson2opdlregularity} establishes an algebraic
+characterisation of OPDLs, defining operations such as concatenation, where the
+languages induced by the algebra are exactly the languages generated by OPDGs.
+This allows for Nerode congruence and the Myhill-Nerode theorem.
+
+Further properties are explored in \cite{ericson3opdlweighted}, who define
+weighted OPDLs over commutative semirings. Further, a link between WOPDGs and
+weighted tree grammars is established. This allows the minimisation problem for
+deterministic WOPDGs to be reduced to the case for a weighted tree grammar. They
+then give asymptotic bounds for the complexity of minimisation. OPDLs are also
+proved to be MSO-definable (that is, given a grammar, we can construct a monadic
+second-order formula such that if $g$ is generated by the grammar, the formula
+is a logical consequence of $g$). However, they do not show the reverse: given
+an MSO formula that defines a graph language (that is within our `universe'), we
+can construct an OPDG that represents the same language. 
+
+As for parsing, \cite{ericson1opdl} proposes a uniform
+polynomial parsing algorithm for a generalisation of OPDGs. Uniform is used here
+in the sense that the grammar is considered as a part of the input, while
+non-uniformity assumes a fixed grammar. Finally, \cite{parsing2} extends
+the uniform polynomial parsing algorithm to the weighted case.
+
+
+\section{Automata Definitions and Preliminaries}
+We now present the definition of DAG automata as per \cite{chiang2018weighted}
+and \cite{blum2019properties}, starting with some preliminaries.
+
+An \textit{alphabet} $\Sigma$ is a finite, nonempty set of symbols. A
+\textit{ranked alphabet} is a tuple $(\Sigma, rank)$, where $\Sigma$ is an
+alphabet, and $ rank: \Sigma \rightarrow \mathbb{N} $ is a ranking function. A
+\textit{doubly ranked} alphabet has a ranking function $ rank: \Sigma
+\rightarrow \N \times \N$, where each symbol is assigned a \textit{head rank}
+and a \textit{tail rank}. 
+
+Given a set $S$, a \textit{multiset} over $S$ is a mapping $\mu: S \rightarrow
+\mathbb{N}$. Informally, it is a set where elements can appear multiple times,
+and we will simply write it as $\{x_1, x_2, \ldots, x_k\}$ where the $x_i$ need
+not be distinct. We denote the collection of all multisets over set $S$ as
+$\mathcal{M}(S)$. 
+
+A \textit{commutative semiring} is a tuple $\langle \K, \oplus, \otimes,
+\veczero, \vecone \rangle$ such that $(\K, \oplus)$ is a commutative monoid with
+identity $\veczero$, $(\K, \otimes)$ is a commutative monoid with identity
+$\vecone$, $\otimes$ left and right distributes over $\oplus$, and $\otimes$
+with $\veczero$ annihilates $\K$. In this paper, when we refer to semirings, we
+mean commutative semirings and we will simply denote the structure by $\K$.
+Further, a semiring is \textit{zero sum free} if there are no elements $a,b \in
+\K \setminus \{\veczero\}$ such that $a \oplus b = \veczero$, and a semiring is
+\textit{zero divisor free} if there are no elements $a,b \in \K \setminus
+\{\veczero\}$ such that $a \otimes b = \veczero$.
+
+\subsection{$\Sigma$-Graphs and DAGs}
+\begin{definition}[$\Sigma$-Graph]\label{def:automatagraph} Let $\Sigma$ be a
+  doubly ranked alphabet of node labels. A $\Sigma$-graph over is a tuple $G =
+  (V, E, lab_V, in, out)$ such that:
+  \begin{itemize}
+    \item $V$ and $E$ are finite sets of vertices and edges respectively.
+    \item $lab_V: V \rightarrow \Sigma$ is a node labelling function.
+    \item $in: V \rightarrow E^*$ is a function mapping each vertex to an
+    ordered sequence of incoming edges (possible empty).
+    \item $out: V \rightarrow E^*$ is a function mapping each vertex to an
+    ordered sequence of outgoing edges (possible empty).
+  \end{itemize}
+
+  We additionally require that $(|in(v)|,|out(v)|) = rank(lab_V(v))$, i.e the
+  node's incoming/outgoing edges match the rank of the label. Moreover, we
+  require that every edge $e \in E$ has $e \in in(v)$ for exactly one $v$, and
+  $e \in out(v')$ for exactly one $v'$, and occurs in these two sequences
+  exactly once. We refer to $v,v'$ as $tar(e),src(e)$ respectively. 
+\end{definition}
+From this point on we shall refer to $\Sigma$-graphs as just graphs. 
+
+We say that a node $v$ is a \textit{root} node if $in(v) = \lambda$, where
+$\lambda$ represents the empty sequence. Likewise, a \textit{leaf} node $v$ has
+$out(v) = \lambda$.
+
+\begin{definition}[Graph Fragment]\label{def:graphfragment} We define a
+  $r$-graph fragment (with $r=(h,t)$) as a tuple $\dd_r =
+  (V,E,lab_V,in,out,E_h,E_t)$ where $(V,E,lab_V,in,out)$ is a $\Sigma$-graph.
+  $E_h = e_1e_2\ldots e_h$ is an ordered set of `head' edges with no source, but
+  a target in $V$, and this set is disjoint from $E$. $E_t = e'_1e'_2\ldots
+  e'_t$ is likewise an ordered set of `tail' edges with no target, again
+  disjoint from both $E$ and $E_t$. A $(0,0)$-graph fragment is just a
+  $\Sigma$-graph.
+\end{definition}
+
+Intuitively, an $r$-graph fragment is a graph with $h$ `dangling' incoming edges
+and $t$ `dangling' outgoing edges for $r = (h,t)$. 
+
+A \textit{path} in a graph or graph fragment is a sequence of edges
+$e_1e_2\ldots e_k$ such that $tar(e_i) = src(e_{i+1})$ for $1 \le i \le k-1$. A
+\textit{cycle} is a path such that $tar(e_k) = src(e_1)$. 
+
+A node $u$ is a \textit{descendant} of node $v$ if there exists a nonempty path
+$e_1e_2\ldots e_k$ such that $src(e_1) = v$ and $tar(e_k)=u$. We also say that
+$v$ is an \textit{ancestor} of $u$. Nodes are descendants/ancestors of
+themselves. 
+
+\begin{definition}[DAG and DAG Languages]\label{def:dag} A $\Sigma$-DAG
+  (henceforth just referred to as a DAG) is a $\Sigma$-graph with no cycles (and
+  a DAG fragment is a graph fragment with no cycles). Denote by $\calD_\Sigma$
+  the set of all nonempty connected DAGs over $\Sigma$. A DAG language $L$ is a
+  subset of $\calD_\Sigma$. Also denote by $\calH_\Sigma$ the set of nonempty
+  connected DAG fragments over $\Sigma$. 
+\end{definition}
+
+\subsection{Automata Definition}
+In this section we focus on the DAG automata studied
+by~\cite{chiang2018weighted} and~\cite{blum2019properties}, but primarily use
+the definitions and notation of the latter. The main difference is that the
+latter enforces an ordering of the incoming and outgoing edges on each node, and
+thus transitions are defined on sequences of states as opposed to multisets.
+Further, Chiang's definition uses an unranked alphabet. These differences are
+minor, as given an automaton as per Chiang's definition, we can represent it by
+adding multiple transitions corresponding to each possible ordering of the state
+multisets. The unranked alphabet can be converted to a doubly ranked alphabet by
+taking all the transitions for each symbol $a$ and creating ranked symbol(s)
+$a_{(h,t)}$ for each transition taking $h$ states to $t$ states.
+\begin{definition}[DAG Automaton]\label{def:dagautomaton} A weighted DAG
+  automaton is a tuple $M = \langle \Sigma, Q, \Theta, \delta, \mathbb{K}
+  \rangle$ where:
+  \begin{itemize}
+    \item $\Sigma$ is a doubly ranked alphabet of node labels
+    \item $Q$ is a finite set of states
+    \item $\mathbb{K}$ is a commutative semiring
+    \item $\Theta \subseteq Q^* \times \Sigma \times Q^*$ is a set of
+    transitions, where each transition $\left( q_1q_2\ldots q_m, \sigma,
+    p_1p_2\ldots p_n \right)$ is written $\alpha \xrightarrow{\sigma}\beta$,
+    where $m,n \ge 0$.
+    \item $\delta: Q^* \times \Sigma \times Q^* \rightarrow \mathbb{K}$ is a
+    weight function assigning a weight to each transition. If $\delta(t) = w$,
+    we also write the transition $t$ as $\alpha \xrightarrow{\sigma/w}\beta$.
+    Note that for transitions not in $\Theta$, we define the weight as semiring
+    $0$.
+  \end{itemize}
+\end{definition}
+
+Transitions take a sequence of states and an alphabet symbol and output another
+sequence of states. This corresponds to reading a DAG node (labelled with
+$\sigma$) and associating states with the incoming and outgoing edge sequences
+(using the implied sequence ordering). Further, we write transitions on root
+nodes as $\lambda \xrightarrow{\sigma/w} \beta$, and transitions on leaf nodes
+as $\alpha \xrightarrow{\sigma/w} \lambda$. 
+
+We now define a \textbf{run} of automaton $M$ on DAG $D$ as a mapping from edges
+to states, $\rho: E \rightarrow Q$. This lets us extend the weighting function
+to runs, where we define the \textbf{run weight} of $\rho$ to be\footnote{When
+we write $\rho(in(v))$ or $\rho(out(v))$, we mean the sequence $\rho(e_1)
+\rho(e_2)\ldots \rho(e_k)$ where $in(v) = e_1e_2\ldots e_k$ is the sequence of
+incoming edges}:
+
+\[
+\delta(\rho) = \bigotimes_{v \in V} \delta(\rho(in(v)), lab_V(v), \rho(out(v)))
+\]
+
+We also define the \textbf{graph weight} of $D$ under $M$, denoted by $[[M]](D)$
+in \cite{chiang2018weighted}:
+\[[[M]](D) = \bigoplus_{\text{all runs $\rho$ on $D$}} \delta(\rho)\]
+
+Observe that unweighted DAG automata correspond to weighted DAG automata over
+the Boolean semiring, and the DAG language \textbf{recognised} by
+unweighted/Boolean semiring weighted DAG automaton $M$ is the set $L(M) = \{D
+\in \calD_\Sigma \, | \, [[M]](D) = true\}$. The set of \textbf{recognisable DAG
+languages} consists of languages for which there exists an unweighted DAG
+automaton recognising it.
+
+As pointed out in \cite{blum2019properties}, $L(M)$ only contains nonempty,
+connected DAGs, since we define it over $\calD_\Sigma$. However, observe that
+for $D_1, D_2 \in L(M)$, then the disconnected DAG written as $D = D_1 \& D_2 =
+(V_1 \cup V_2, E_1 \cup E_2, lab_{V_1} \cup lab_{V_2}, in_1 \cup in_2, out_1
+\cup out_2)$ is also accepted by $M$ assuming that the vertex and edge sets are
+disjoint. Indeed, we can construct an accepting run $\rho_D = \rho_1 \cup
+\rho_2$ given accepting runs $\rho_1,\rho_2$ for $D_1$ and $D_2$ respectively.
+Hence, if $M$ accepts a language of nonempty, connected DAGs $L(M)$, it also
+accepts the infinite language $L(A)^\&$, defined as the set of all DAGs of the
+form $D_1 \& D_2 \& \ldots \& D_n$ for $D_i \in L(A)$ and $n \ge 0$ (where $n=$
+corresponds to the empty DAG). We can think of this as similar to a Kleene
+closure over the set of connected DAGs $L(M)$, although in this case $L(M)$ may
+be infinite.  
+
+\begin{observation}
+Given disjoint $D_1, D_2 \in L(M)$, we have $D = D_1 \& D_2$ such that $[[M]](D)
+= [[M]](D_1) \otimes [[M]](D_2)$
+\end{observation}
+\begin{proof}
+  Each run of $M$ on $D$ can be decomposed into the union of a run on $D_1$ and
+  a run on $D_2$, as the edge sets are disjoint. As such, if $\rho$ is a run on
+  $D$, it follows from the definition of $\delta(\rho)$ and the disjointness of
+  the vertex sets that $\delta(\rho) = \delta(\rho_1) \otimes \delta(\rho_2)$ where
+  $\rho_1,\rho_2$ are runs on $D_1,D_2$ respectively. This gives us:
+
+  \begin{align*}
+    [[M]](D) &= \bigoplus_{\text{all }\{\rho_1,\rho_2\}} \delta(\rho_1) \otimes \delta(\rho_2)\\
+    &= \bigoplus_{\text{all } \rho_1} \bigoplus_{\text{all } \rho_2} \delta(\rho_1) \otimes \delta(\rho_2)\\
+    &= \bigoplus_{\text{all } \rho_1} \left(\delta(\rho_1) \otimes \bigoplus_{\text{all } \rho_2} \delta(\rho_2)\right) \\
+    & = \left(\bigoplus_{\text{all } \rho_1} \delta(\rho_1)\right) \otimes \left(\bigoplus_{\text{all } \rho_2} \delta(\rho_2)\right) \\
+    & = [[M]](D_1) \otimes [[M]](D_2)
+  \end{align*}
+
+\end{proof}
+
+\section{Contexts, Partial Weights, and a Formal Correctness Proof of the Recognition Algorithm}
+In this section, we define the notion of graph contexts and partial weights (a
+similar concept to forward/backward weights of string automata). This was
+inspired by the recognition/graph weight calculation algorithm presented by
+\cite{chiang2018weighted} and we use these definitions to formalise and prove
+correctness of the algorithm. 
+
+\begin{definition}[Graph Context]\label{def:graphcontext}
+
+  A graph context is a function $\cc: \calH_\Sigma^k \rightarrow \calH_\Sigma$,
+  that takes in $k$ graph fragments and returns another graph fragment. Every
+  graph context $\cc$ has a type $ type(\cc) = \langle (r_1,r_2,\ldots,r_k), r'
+  \rangle$ such that the $i$'th argument fragment is of type $r_i$, and the
+  returned graph fragment is of type $r'$. Further, a context has sequences of
+  incoming and outgoing edges $E_h = e_1e_2\ldots e_h, E_t = e'_1e'_2\ldots
+  e'_t$ for $r' = (h,t)$. 
+
+  We define the set of graph contexts $C_\Sigma$ over doubly ranked alphabet
+  $\Sigma$ as the smallest set defined inductively according to the following:
+
+  \begin{itemize}
+    \item Consider the function $\cc$ of type $\langle (r),r\rangle$ such that
+    $\cc[\dd_r] = \dd_r$ for any $r$-graph fragment. Then $\cc \in C_\Sigma$,
+    and $E_h,E_t$ are the same as those of $\dd_r$. These are `trivial' contexts
+    and can be thought of as a placeholder/gap.
+
+    \item Let $\dd_r$ be a $r$-graph fragment consisting of $k$ nodes, and let
+    $v_1,v_2,\ldots, v_k$ be a sequence of these nodes whose labels have ranks
+    $r'_1, r'_2,\ldots, r'_k$ respectively. Let $\cc_i \in C_\Sigma$ be a
+    context of type $\langle (r''_{1_i},\ldots,r''_{m_i}), r'_i\rangle$. Then,
+    let $\cc$ be the function obtained by replacing the nodes $v_1,v_2,\ldots
+    v_k$ in $\dd_r$ with contexts $\cc_1, \cc_2,\ldots,\cc_k$ (matching the
+    edges based on the ordering). Then, $\cc \in C_\Sigma$ and $\cc$ is a
+    context with rank $\langle
+    (r''_{1_1},\ldots,r''_{m_1},\ldots,r''_{1_k},\ldots,r''_{m_k}),r\rangle$.
+    The incoming and outgoing edge sequences $E_h, E_t$ are the same as those of
+    $\dd_r$, and some of these edges may also be identified with edges of an
+    internal context $\cc_i$. Informally speaking, taking a graph fragment and
+    replacing all vertices with contexts generates a new context. 
+  \end{itemize}
+
+  Let $\cc$ be a context of type $\langle (r_1,r_2,\ldots,r_k), r' \rangle$.
+  Given graph fragments $\dd_{r_1}, \dd_{r_2}, \ldots, \dd_{r_k}$ we refer to
+  the term $\cc[\dd_{r_1}, \dd_{r_2}, \ldots, \dd_{r_k}]$ as a \emph{grounded
+  context}, and such a term is a $r'$-graph fragment. When performing this
+  substitution, each `argument' of the context $\cc$ is replaced with a graph
+  fragment of matching rank, and the incoming/outgoing edges are identified with
+  each other based on the ordering. 
+
+\end{definition}
+
+This definition also implies that contexts can be nested (provided the types
+agree). For instance, a context $\cc$ with type $\langle (r, r'), r\rangle$ can
+be nested into its first argument to form $\cc' = \cc[\cc, \cc_{r'}]$, which is
+a $\langle (r,r',r'), r \rangle$ context (where we use the trivial context
+$\cc_{r'}$ of type $\langle (r'), r' \rangle$ for completeness). 
+
+Furthermore, observe that this construction is similar to a grammar-like
+derivation of DAGs, starting with a trivial context of type $\langle (r), r
+\rangle$ where $r = (0,0)$. Graphs could then be generated with rules that
+replace contexts with fragments/other contexts, with fragments representing
+terminals and contexts representing nonterminals. This is similar to node
+replacement graph grammars and relationships between such grammars and automata
+may be worth looking into.
+
+\begin{lemma}\label{lem:onegroundedcontext} Every graph fragment can be
+  expressed as at least one grounded context.
+\end{lemma}
+
+\begin{proof}
+  Let $\dd_r$ be an $r$-graph fragment with $n$ nodes. Given some ordering of
+  the nodes $1,\ldots,n$, if we replace every node $i$ of rank $r_i$ with a
+  trivial context of type $\langle (r_i),r_i \rangle$, we obtain a context $\cc$
+  with arguments corresponding to each node of $\dd_r$ and an output type of
+  $r$, as per the inductive definition of a graph context. Let $\dd^{(i)}_{r_i}$
+  be the $r_i$-graph fragment containing just node $i$ with label rank $r_i$.
+  Then, since the arguments of $\cc$ are in the node order of $1,\ldots,n$, it
+  is easy to see that $\cc[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+  \dd^{(n)}_{r_n}] = \dd_r$.
+\end{proof}
+
+For graph fragments with more than 1 node, there are multiple ways to express
+the fragment as a grounded context.
+
+\begin{definition}[Partial Weight]\label{def:partialweight} Let $M = \langle
+  \Sigma, Q, \Theta, \delta, \K \rangle$ be a DAG automaton, and let $\dd_r$ be
+  a graph fragment with $r = (h,t)$. We define the \textbf{partial weight}
+  $\aalpha$ of the graph fragment given a mapping $f: E_h \cup E_t \rightarrow
+  Q$ inductively as follows:
+  \begin{itemize}
+    \item For a graph fragment of 1 node $v$, we have 
+    \[
+    \aalpha[\dd_r, f] = \delta(f(E_h), lab_V(v), f(E_t))
+    \]
+
+    \item For a graph fragment with $n > 1$ nodes, by the construction in Lemma
+    \ref{lem:onegroundedcontext}, we can express $\dd_r = \cc[\dd^{(1)}_{r_1},
+    \dd^{(2)}_{r_2},\ldots, \dd^{(n)}_{r_n}]$. We then define:
+    \[
+    \aalpha[\dd_r,f] = \aalpha[\cc[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+    \dd^{(n)}_{r_n}],f] =  \bigoplus_{\text{all }\calF(f)} \bigotimes_{i=1}^n \aalpha[\dd^{(i)}_{r_i}, f_i]
+    \]
+    Where $\calF(f)$ is an (ordered) set of mappings $\{f_1,f_2,\ldots,f_n\}$
+    such that\footnote{If $r = (x,y)$ we say $r[0] = x, r[1]=y$} $f_i:
+    E_{r_i[0]} \cup E_{r_i[1]} \rightarrow Q$, which maps the `dangling' edges
+    of $\dd^{(i)}_{r_i}$ to states. We require that the set of these mappings
+    has no conflicts, both amongst the $f_i$'s and with $f$, such that if we
+    were to draw the full graph fragment $\dd_r$ and assign states to edges
+    based on the functions in $\calF(f)$, each edge would have exactly one
+    state. More formally, we must obtain a function $\rho: E \cup E_h \cup E_t
+    \rightarrow Q$ for $\dd_r = (V,E,lab_V,in,out,E_h,E_t)$ such that $\rho =
+    \bigcup_i \calF(f)_i$ and $\rho$ agrees with $f$ on $E_h\cup E_t$.
+    
+    \item We also extend the above definition for the case where $\dd_r$ is
+    expressed as a different grounded context, i.e $\dd_r = \cc[\tt_1,
+    \tt_2,\ldots,\tt_k]$, where $\tt_i$ is some grounded context:
+    \[
+    \aalpha[\cc[\tt_1,\tt_2,\ldots,\tt_k],f] =  \bigoplus_{\text{all }\calF(f)} \bigotimes_{i=1}^k \aalpha[\tt_i, \calF(f)_i]
+    \]
+  \end{itemize}
+  
+\end{definition}
+
+We now show that the above definition is consistent, i.e two identical graph
+fragments expressed as different grounded contexts will have the same partial
+weight, and that it aligns with the definition of graph weight. 
+
+
+\begin{lemma}\label{lem:partialweightequivalence} Let $\dd_r$ be an $r$-graph
+  fragment with $n>1$ nodes. We have from Lemma \ref{lem:onegroundedcontext}
+  that $\dd_r = \cc_1[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+  \dd^{(n)}_{r_n}]$. Let $ \dd_r = \cc_2[\tt_1, \tt_2, \ldots, \tt_k]$ be
+  another grounded context equivalent to $\dd_r$, where $\tt_i$ is a grounded
+  context. We have that:
+
+  \[
+    \aalpha[\cc_1[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+    \dd^{(n)}_{r_n}],f] = \aalpha[\cc_2[\tt_1,\tt_2,\ldots,\tt_k],f]
+  \]
+\end{lemma}
+
+\begin{proof}
+
+  Each $\tt_i$, being a grounded context, is itself a graph fragment and can
+  therefore be expressed as $\cc_i[\dd^{(i,1)}_{r_{i,1}},
+  \dd^{(i,2)}_{r_{i,2}},\ldots, \dd^{(i,m_i)}_{r_{i,m_i}}]$ as in
+  Lemma~\ref{lem:onegroundedcontext} such that $\dd^{(i,1)}_{r_{i,1}}$ is a
+  single node. Then, since the $\tt_i$'s form a partition of $\dd_r$'s nodes,
+  the union of all the nodes of the $\tt_i$'s is exactly the set of nodes in
+  $\dd_r$, i.e $\bigcup_{i=1}^k \bigcup_{j=1}^{m_i} \{\dd^{(i,j)}_{r_{i,j}}\} =
+  \bigcup_{i=1}^n \{\dd^{(i)}_{r_i}\}$. 
+
+  We have that:
+  
+  \begin{align*}
+    \aalpha[\cc_2[\tt_1,\ldots,\tt_k],f] &= \bigoplus_{\text{all } \calF(f)} \bigotimes_{i=1}^k \aalpha[\tt_i, f_i]\\
+    &= \bigoplus_{\text{all } \calF(f)} \bigotimes_{i=1}^k \left(\bigoplus_{\text{all } \calF'(f_i)} \bigotimes_{j=1}^{m_i} \aalpha[\dd^{(i,j)}_{r_{i,j}}, f'_{i,j}] \right)\\
+  \end{align*}
+
+  Note that $f_i$ is a mapping of dangling edges of $\tt_i$ to states in $Q$,
+  and $\calF'(f_i)$ is another set of nonconflicting mappings $\{f'_{i,1},
+  \ldots, f'_{i,m_i}\}$ of which $f'_{i,j}$ maps dangling edges of node
+  $\dd^{(i,j)}_{r_{i,j}}$ to states in $Q$. 
+
+  We can then express the above equation as:
+  \begin{align*}
+    \aalpha[\cc_2[\tt_1,\ldots,\tt_k],f] &= \bigoplus_{\text{all } \calF(f)} \bigotimes_{i=1}^k \left(\bigoplus_{\text{all } \calF'(f_i)} \bigotimes_{j=1}^{m_i} \aalpha[\dd^{(j_i)}_{r_{j_i}}, f'_{i,j}] \right)\\
+    &= \bigoplus_{\text{all } \calF(f)} \bigoplus_{\text{all } \mathcal{F'}(f_1),\ldots, \mathcal{F'}(f_k) } \bigotimes_{i=1}^k \bigotimes_{j=1}^{m_i} \aalpha[\dd^{(j_i)}_{r_{j_i}}, f'_{i,j}] \\
+    &= \bigoplus_{\text{all } \calF^*(f)}\bigotimes_{i=1}^n \aalpha[\dd^{(i)}_{r_{i}}, f^*_{i}] \\
+    &= \aalpha[\cc_1[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+    \dd^{(n)}_{r_n}],f] 
+  \end{align*}
+
+  Where given some $\calF(f)$, we define $\calF^*(f) = \bigcup_{i=1}^k
+  \calF'(f_i)  =  \bigcup_{i=1}^k \bigcup_{j=1}^{m_i} \{f'_{i,j}\} = \{f^*_1,
+  f^*_2, \ldots, f^*_n\} $ as from above we know that the $\tt_i$'s partition
+  the nodes of $\dd_r$ (and assuming some consistent ordering). 
+\end{proof}
+
+\begin{lemma}\label{lem:partialweightgraphweight} Let $M$ be a DAG automaton.
+  For a graph fragment $\dd_r$ with $r = (0,0)$, i.e a standard DAG, we have:
+  \[
+  \aalpha[\dd_r, \emptyset] = [[M]](\dd_r) 
+  \]
+  
+\end{lemma}
+Note: since a $(0,0)$ ranked graph fragment has no dangling edges, we define the
+only possible mapping from its dangling edges to states as $\emptyset$. This
+also means that $\calF(\emptyset)$ need only be internally consistent amongst
+the $f_i$'s.
+
+\begin{proof}
+Let $n$ be the number of nodes in $\dd_r$. Since $\calF(\emptyset) = \{f_1,
+f_2,\ldots f_n\}$ corresponds to a set of non-conflicting mappings from edges to
+states, taking the union of all the mappings gives us a run $\rho: E \rightarrow
+Q$, where $E$ is the set of edges of $\dd_r$. Again using the construction from
+Lemma 4.3 to get $\dd_r = \cc[\dd^{(1)}_{r_1}, \dd^{(2)}_{r_2},\ldots,
+\dd^{(n)}_{r_n}]$ we get:
+
+\begin{align*}
+  \aalpha[\dd_r, \emptyset] &= \bigoplus_{\text{all }\calF(f)} \bigotimes_{i=1}^n \aalpha[\dd^{(i)}_{r_i}, \calF(f)_i]\\
+  &= \bigoplus_{\text{all } \rho} \bigotimes_{i=1}^n \delta(\rho(E_h), lab_V(v), \rho(E_t)) &&\quad \dd^{(i)}_{r_i}\text{ has only 1 node } v\\
+  &=  \bigoplus_{\text{all } \rho} \delta(\rho)\\
+  &= [[M]](\dd_r)
+\end{align*}
+\end{proof}
+
+\begin{theorem}
+  The recognition/graph weight computation algorithm provided in
+  \cite{chiang2018weighted} (and given in the appendix) is correct, i.e we
+  return $[[M]](D)$ for input DAG $D$. 
+\end{theorem}
+\begin{proof}
+  Let $\dd$ be the input DAG of rank $r = (0,0)$ with $n$ nodes. 
+
+  We first show that after each edge contraction, the algorithm maintains a
+  grounded context decomposition $\dd = \cc[\tt_1, \ldots, \tt_k]$ as well as
+  maintaining the values of $\aalpha[\tt_i, f]$ for all $\tt_i$ and all possible
+  $f$. We show this by induction on the number of edge contractions.
+
+  Before the first edge contraction, we have $\dd = \cc_1[\dd^{(1)}_{r_1},
+  \dd^{(2)}_{r_2},\ldots, \dd^{(n)}_{r_n}]$, and the first section of the
+  algorithm iterates through all these nodes and computes all
+  $\aalpha[\dd^{(i)}_{r_i}, f]$. 
+
+  For the inductive case, assume that after $m-1$ edge contractions, we have a
+  decomposition $\dd = \cc[\tt_1, \ldots, \tt_k]$ and values of all
+  $\aalpha[\tt_i, f]$. When we contract the next edge, observe that by design we
+  contract an edge between two graph fragments $\tt_i$ and $\tt_j$ since we
+  delete any intra-fragment edges from the contraction candidates (edges in
+  $I$). By contracting this edge, the algorithm forms a `supervertex' $v$
+  corresponding to a larger graph fragment $\tt' = \cc'[\tt_i, \tt_j]$ for some
+  context $\cc'$ (implicitly defined). We then compute the `dangling edges',
+  denoted by $star(v)$ in the algorithm, by combining the dangling edges of
+  $\tt_i$ and $\tt_j$ (excluding edges between the two fragments). 
+
+  Now, by definition for a mapping $h: star(v) \rightarrow Q$, if we have
+  mappings $f,g$ for the dangling edges of $\tt_i,\tt_j$ respectively such that
+  $f,g$ do not conflict on shared edges ($f|_I = g|_I$) and $h = f \cup g
+  \setminus f|_I$, the set $\{f,g\}$ is a valid $\calF(h)$. Moreover, any
+  $\calF(h)$ must be expressible in this form. Using the definition of partial
+  weight and Lemma \ref{lem:partialweightequivalence} we get:
+
+  \begin{align*}
+    \aalpha[\cc'[\tt_i, \tt_j],h] &= \bigoplus_{\text{all }\calF(h)} \aalpha[\tt_i, h_i] \otimes \aalpha[\tt_j, h_j]\\
+    &= \bigoplus_{\text{all }h = f \cup g \setminus f|_I} \aalpha[\tt_i, f] \otimes \aalpha[\tt_j, g]
+  \end{align*}
+  This is exactly what the recognition algorithm computes. 
+
+  Finally, since in each edge contraction we merge two graph fragments, after
+  $n-1$ edge contractions we terminate at a decomposition $\dd =
+  \cc''[\tt_{final}]$ and compute $\aalpha[\cc''[\tt],h]$, where $h = \emptyset$
+  as $\dd$ has rank $(0,0)$. By Lemma \ref{lem:partialweightgraphweight}, this
+  is equal to $[[M]](\dd)$. 
+\end{proof}
+
+\section{Determinism, Hypergraph Representation, and Equivalence of States}
+
+\cite{blum2019properties} define notions of equivalence and minimisation for
+top-down deterministic DAG automata, and in doing so prove that the equivalence
+problem is decidable in polynomial time for deterministic automata. In this
+section we explore these ideas and present alternative but equivalent
+definitions for equivalence of states by viewing a DAG automaton as a
+hypergraph. In this sense, we mirrors the definitions of state equivalence for
+tree automata. 
+
+\begin{definition}[Deterministic Automaton]\label{def:deterministicautomaton} A
+  DAG automaton $M =  \langle \Sigma, Q, \Theta, \delta, \mathbb{K}\rangle$ is
+  top down deterministic if given a symbol $\sigma \in \Sigma$, for each $\alpha
+  \in Q^*$ we have at most one $\beta \in Q^*$ such that $ \alpha
+  \xrightarrow{\sigma} \beta$ is a rule in $\Theta$. An automaton is bottom up
+  deterministic if for a symbol $\sigma \in \Sigma$, for each $\beta \in Q^*$,
+  we have at most one $\alpha \in Q^*$ such that $\alpha \xrightarrow{\sigma}
+  \beta$ is a rule in $\Theta$.
+
+\end{definition}
+
+In a deterministic automaton, there is at most one accepting run $\rho$ per DAG
+$D$ (but this does not necessarily hold for DAG fragments).
+
+It the class of deterministic recognisable DAG languages, i.e the DAG languages
+recognised by either a bottom up or top down automaton, is a strict subset of
+the class of recognisable DAG languages. In other words, determinism strictly
+decreases the power of our automaton. The argument, presented in
+\cite{blum2019properties}, is quite simple and we summarise the main ideas.
+Regular tree languages are also regular DAG languages as DAG automata generalise
+tree automata. Now consider a top down deterministic DAG automaton recognising a
+tree language (which is also a DAG language). Such a DAG automaton can also be
+expressed as a top down deterministic tree automaton. However, since there are
+regular tree languages that cannot be recognised by a top down deterministic
+tree automaton, such a language (which is also a regular DAG language) also
+cannot be recognised by a top down deterministic DAG automaton.   
+
+For the remainder of this section we will focus on top down deterministic
+automata. Note however that the concepts still apply to bottom up deterministic
+automata, as we can view a bottom up deterministic automaton as a top down one
+accepting the `reverse' language (i.e the DAG edge directions are reversed).
+This also implies bottom up deterministic DAG automata have the same power as
+top down deterministic automata, and are strictly weaker than nondeterministic
+automata. This notion of a `dual' automaton is delineated in
+\cite{blum2019properties}. 
+
+\begin{definition}[Reduced Automaton]\label{def:reducedautomaton}
+
+  A DAG automaton $M =  \langle \Sigma, Q, \Theta, \delta, \mathbb{K}\rangle$ is
+  reduced if there are no useless transitions. A transition $t \in \Theta$ is
+  not useless if there is at least one DAG $D \in L(M)$ for which there exists a
+  run $\rho$ with $\delta(\rho) \ne 0$, such that $t = (\rho(in(v)), lab_V(v),
+  \rho(out(v)))$ for some vertex $v$ in $G$. 
+\end{definition}
+
+For the remainder of this section we will assume DAGs are reduced. This can be
+performed in polynomial time as shown in \cite{blum2019properties}.
+
+\begin{definition}[Automata Hypergraphs and
+Hyperpaths]\label{def:automatahyperpaths}
+  
+  Let $M =  \langle \Sigma, Q, \Theta, \delta, \mathbb{K}\rangle$ be a DAG
+  Automaton. We can view this automaton as a hypergraph, with each state $q \in
+  Q$ forming a node, and each transition $\alpha\overset{a}{\rightarrow}\beta$
+  representing a hyperedge $e$ with $src(e) = \alpha$ and $tar(e) = \beta$,
+  where $\alpha,\beta \in Q^*$. Note that transitions are between ordered
+  sequences of states, and therefore we may have two hyperedges/transitions
+  between two sets of states, with the only difference being the orderings. 
+
+  
+  Then, we define a \textbf{hyperpath} $\ppi$ through this hypergraph as a tuple
+  $(I,F,S)$, where $I$ is an initial ordered sequence of states $q_1\ldots q_m$,
+  $F$ is a final ordered sequence of states $p_1\ldots p_n$, and $S$ is a
+  sequence of hyperedges/transitions $t_1,t_2,\ldots,t_k$ such that the
+  following algorithm takes in $I,S$ as input and returns a multiset with the
+  same elements as $F$:
+
+  \begin{algorithm*}[H]
+    \caption{$\textsc{HyperpathTraversal}(I,S)$}
+	  \label{alg:hyperpathTraversal}
+    $states \gets \{I\}$ \Comment*[r]{$\{I\}$ is the multiset of sequence
+    elements} \ForEach{$\alpha \xrightarrow{a} \beta  \in S$
+    \Comment*[r]{Iterate in sequence order}}{ $states \gets (states \setminus
+    \{\alpha\}) \cup \{\beta\}$\\
+    } \Return{states}
+  \end{algorithm*}
+  
+  This effectively enforces a topological order on the hyperedge sequence such
+  that we can only pick a hyperedge in our path if its source states are
+  `available'.
+
+  We define the \textbf{weight} of a hyperpath $\ppi = (I,F,S)$ as $\ww(\ppi) =
+  \bigotimes_{t \in S} \delta(t)$. 
+\end{definition}
+
+\begin{definition}[Yield of Hyperpath]\label{def:hyperpathyield}
+
+  The unique \textbf{yield} of a hyperpath $(I,F,S)$ is the graph fragment $\dd
+  = (V,E,src,tar,lab_V,E_h,E_t)$ and run $\rho: E \cup E_h \cup E_t \rightarrow
+  Q$ such that:
+  \begin{itemize}
+    \item $\rho(E_h) = I$, i.e each `head' edge is assigned the corresponding
+    state in the initial sequence (we match the $i$'th edge with the $i$'th
+    state)
+    \item $\rho(E_t) = F$
+    \item For every $v \in V$, $(\rho(in(v)), lab_V(v), \rho(out(v)) )\in S$.
+  \end{itemize}
+\end{definition}
+
+
+With this definition, we can see that a run $\rho$ of automaton $M$ on a DAG $D$
+corresponds to a hyperpath $\ppi$ in $M$'s hypergraph with that $I = F =
+\lambda$ such that $\ppi$ yields $G$ and $\ww(\ppi) = \delta(\rho)$. 
+
+We now have the tools to present an alternative characterisation of equivalent
+states in an unweighted DAG automaton. This mirrors the state equivalence
+definition of tree automata, using the hypergraph representation of the
+automaton. We also show that this definition is equivalent to the inductive
+definition of \cite{blum2019properties}.
+
+\begin{definition}[Equivalence and Distinguishability of States
+(Unweighted)]\label{def:unweightedequivalence}
+  
+  Let $M =  \langle \Sigma, Q, \Theta\rangle$ be a reduced top down
+  deterministic DAG automaton (unweighted so we omit $\delta$ and $\K$).
+  
+  Two states $q_1, q_2 \in Q$ are \textbf{equivalent} if the following holds:
+  For all sequences $I_1$ with an occurrence of $q_1$ at position $i$, if there
+  exists a hyperpath from $I_1$ to some $F_1$ yielding $\dd$ with run $\rho_1$,
+  then if we replace position $i$ in $I_1$ with $q_2$ to form $I_2$, then there
+  must exist a hyperpath from $I_2$ to some $F_2$ yielding $\dd$ with run
+  $\rho_2$ obeying the following:
+  
+  \[
+    \rho_2(e) = \begin{cases}
+      \rho_1(e) &\quad \text{ for } e \in E_h \text{ except the $i$'th edge } e_i\\
+      q_2 &\quad \text{ for the $i$'th edge in $E_h$, } e_i\\
+    \end{cases}
+  \]
+  For all other $e \in E \cup E_t$ we place no restrictions on $\rho_2$. 
+
+  If the above doesn't hold, then $q_1$ and $q_2$ are \textbf{distinguishable}.
+
+\end{definition}
+
+
+\begin{theorem}
+  This definition of distinguishable states is equivalent to that of
+  \cite{blum2019properties} (provided in Appendix).
+\end{theorem}
+\begin{proof}
+  The base case of Blum's definition says that two states $p,p'$ are
+  distinguishable if there exists a transition $\alpha p \alpha'
+  \overset{a}{\rightarrow} \beta$ but no transition $\alpha p' \alpha'
+  \overset{a}{\rightarrow} \beta'$ for $\alpha,\alpha',\beta,\beta' \in Q^*$. In
+  this case, let $I_1 = \alpha p \alpha'$, $F_1 = \beta$. Then, there exists the
+  hyperpath containing just the hyperedge/transition $\alpha p \alpha'
+  \overset{a}{\rightarrow} \beta$ yielding $a$ but there does not exist a
+  hyperpath yielding $a$ for $I' = \alpha p'\alpha'$ since no single transition
+  consuming symbol $a$ has source states $\alpha p'\alpha'$.
+
+  For the inductive case, in Blum's definition, $p,p'$ are distinguishable if
+  there exist transitions $\alpha_0 p \alpha_0' \overset{a_0}{\rightarrow}
+  \beta_0 q_0 \beta_0'$ and  $\alpha_0 p' \alpha_0' \overset{a_0}{\rightarrow}
+  \gamma_0 q_0' \gamma_0'$ such that $q_0$ and $q_0'$ are distinguishable.
+  `Unrolling' this definition, we must have some sequence of transitions
+  $\alpha_0 p \alpha_0' \overset{a_0}{\rightarrow} \beta_0 q_0 \beta_0',
+  \alpha_1 q_0 \alpha_1' \overset{a_1}{\rightarrow} \beta_1 q_1 \beta_1',\ldots,
+  \alpha_k q_{k-1} \alpha_k' \overset{a_k}{\rightarrow} \beta_k$ and $\alpha_0
+  p' \alpha_0' \overset{a_0}{\rightarrow} \gamma_0 q_0' \gamma_0', \alpha_1 q_0'
+  \alpha_1' \overset{a_1}{\rightarrow} \gamma_1 q_1' \gamma_1',\ldots,
+  \alpha_{k-1} q_{k-2}' \alpha_{k-1}' \overset{a_{k-1}}{\rightarrow}
+  \gamma_{k-1} q_{k-1}' \gamma_{k-1}'$ such that there is no transition
+  $\alpha_k q_{k-1}' \alpha_k' \overset{a_k}{\rightarrow} ...$
+
+  As such, if we let $I =  \alpha_0 p \alpha_0' \alpha_1 \alpha_1'\ldots
+  \alpha_k\alpha_k'$ and $F =
+  \beta_0\beta_0'\beta_1\beta_1'\ldots\beta_{k-1}\beta_{k-1}' \beta_k$ the
+  hyperpath formed by the first sequence of rules above yields the graph
+  fragment $\dd$, consisting of a chain of $a_0, a_1,\ldots, a_k$ (and many
+  dangling edges). We also get the run $\rho_1$ which assigns states to edges
+  based on the transitions in the hyperpath. However, if we replace $p$ by $p'$
+  in $I$ to form $I'$, we have no hyperpath yielding $\dd$ with run $\rho_2$ as
+  defined in Def \ref{def:unweightedequivalence}. To see why, observe that as
+  per the definition of $\rho_2$ and top down determinism, we must take the
+  transition $\alpha_0 p' \alpha_0' \xrightarrow{a_0} \gamma_0 q_0' \gamma_0'$
+  in order to yield the first node $a_0$ with the same ordered sequence of
+  edges. Similarly, we must then yield a node with label $a_1$ such that
+  incoming edges from $E_h$ must match the $a_1$ node in $\dd$ and their states
+  in $\rho_2$ must match $\rho_1$. Further, the $j$'th outgoing edge from node
+  $a_0$ (assigned state $q_0$) is connected to an incoming edge of node $a_1$.
+  This is only possible if we take the transition $\alpha_1 q_0' \alpha_1'
+  \xrightarrow{a_1} \gamma_1 q_1' \gamma_1'$. By repeating this argument, we
+  conclude that we must take transitions as per the second sequence above, until
+  we reach the last transition, at which point we cannot yield a node labelled
+  $a_k$ since we have no transition $\alpha_k q_{k-1}' \alpha_k'
+  \overset{a_k}{\rightarrow} ...$.
+
+  We have thus shown that any two states distinguished according to Blum's
+  definition are distinguished by our definition. 
+  
+  We now show the converse, i.e any states distinguished by our definition are
+  also distinguished by that of Blum. Let $q, q'$ be two distinguishable states
+  such that there exists $I,F$ with a hyperpath $\ppi$ between them yielding
+  $\dd$ and $q$ occurs in the $i$'th position of $I$. As these states are
+  distinguishable, if we replace the $i$'th state in $I$ with $q'$ to create
+  $I'$, there is no hyperpath from $I'$ to some $F'$ yielding $\dd$. Let $S =
+  t_1t_2\ldots t_k$ be the hyperpath yielding $\dd$ prior to state replacement.
+  We shall induct on the length of $S$.
+
+  The base case where $k=1$ is simple, as the existence of a graph fragment
+  $\dd$ implies there is a rule $\alpha q \alpha' \xrightarrow{a} \beta$, but
+  the nonexistence of a graph fragment containing the node $a$ after state
+  replacement implies there is no rule $\alpha q' \alpha' \xrightarrow{a}
+  \ldots$, aligning with the base case of Blum's definition.
+
+  We will split the inductive case into two cases. Consider the first transition
+  $t_1 = \alpha \xrightarrow{a} \beta$. If the $i$'th state $q$ is not a part of
+  $\alpha$, then replacing $q$ with $q'$ makes no difference to this transition.
+  Therefore, we can remove this transition and create $I_2$ by removing $\alpha$
+  from $I$ and appending $\beta$. This results in a new DAG fragment $\dd'$
+  yielded by hyperpath $S' = t_2\ldots t_k$, such that $\dd'$ cannot be yielded
+  by replacing $q$ with $q'$ in $I_2$, and we apply the inductive hypothesis. 
+
+  For the other case, we have $t_1 = \alpha q \alpha' \xrightarrow{a} \beta$. If
+  we cannot construct $\dd$ post state replacement because there is no rule
+  $\alpha q' \alpha' \xrightarrow{a} \ldots$ then we are done immediately. If on
+  the other hand there is a rule $\alpha q' \alpha' \xrightarrow{a} \gamma$,
+  then the state replacement has no effect on this node with label $a$.
+  Therefore, we can create $I_2$ by removing  $\alpha q \alpha'$ from $I$ and
+  appending $\beta$. Then, $S' = t_2 \ldots t_k$ must yield a graph fragment
+  $\dd'$ similar to $\dd$ but without the `first' node labelled $a$. However,
+  there must be a state $p \in \beta$ and a state $p' \in \gamma$ such that
+  replacing $p$ with $p'$ then there cannot be a hyperpath yielding $\dd'$ (if
+  there was, we contradict our initial assumption that replacing $q$ with $q'$
+  makes it impossible to yield $\dd$). Thus, we can apply the inductive
+  hypothesis and therefore the statement holds for all hyperpath lengths.
+
+  We have now shown that if two states are distinguished by our definition, they
+  are also distinguished by that of Blum's, and combining with the first part,
+  we conclude that they are equivalent. 
+\end{proof}
+
+We also present a definition of cyclic automata.
+
+\begin{definition}
+  (Cyclic Automaton)
+
+  A reduced DAG automaton $M =  \langle \Sigma, Q, \Theta \rangle$ is cyclic if
+  there exists a hyperpath $ \ppi = (K,K,S)$, $K \ne \lambda$, where $S$ is a nonempty sequence
+  of transitions such that $\ppi$ yields a connected DAG fragment. In other
+  words, there is a sequence of transitions that takes an initial sequence of
+  states to the same sequence of states. This can also be viewed as the
+  hypergraph of the automaton $M$ being cyclic. 
+\end{definition}
+
+\begin{conjecture}
+  Given a reduced DAG automaton $M = \langle \Sigma, Q, \Theta \rangle$, the
+  language of connected DAGs recognised by $M$, denoted $L(M)$ is infinite iff
+  $M$ is cyclic.
+\end{conjecture}
+
+\begin{proof}[Proof Idea]
+
+  If $L(M)$ is infinite, then for some $D \in L(M)$ and a nonzero
+  weight run $\rho$ on $D$, we must have a sequence of connected transitions
+  $t_1,t_2\ldots,t_k,t_1$. By connected transitions we mean that two consecutive
+  transitions share an edge with the same state under $\rho$. This follows as
+  $L(M)$ being infinite means that path lengths in the DAGs are unbounded, but
+  the set of transitions is finite. Let $e_1,e_2,\ldots,e_k$ be the path
+  that connects the transitions, i.e $t_1$ and $t_2$ both use edge $e_1$, $t_2$
+  and $t_3$ both use edge $e_2$, and $t_k$ and the repeat $t_1$ both use $e_k$.
+
+  We claim that for $t_i = \alpha_i \xrightarrow{a_i} \beta_i$, if we set $K =
+  \alpha_1 \alpha_2 \ldots \alpha_k \setminus \{\rho(e_1),\rho(e_2),
+  \ldots,\rho(e_k)\}$ (meaning we remove all instances of state $\rho(e_i)$), we
+  can find an $S$ that takes $K$ to $K$, i.e we can find a hyperpath $\ppi =
+  (K,K,S)$. 
+
+  We leave this as a conjecture, and defer the proof to a future paper but the
+  idea is to use the hyperpath that yields $D$ (which includes the sequence of
+  transitions $t_1,\ldots, t_k$) and `rearrange' the connections. See the
+  following diagram for an example:
+  % https://tikzcd.yichuanshen.de/#N4Igdg9gJgpgziAXAbVABwnAlgFyxMJZABgBoBGAXVJADcBDAGwFcYkQBHAfXJAF9S6TLnyEU5UgCZqdJq3YAjfoJAZseAkQlUaDFm0Scuk5UPWitpAMwy98w9xMCzIzeNLFbcgyHqnVwhpiyJLWXvrs3Fb+aq7BZNK63uwAxjGBFihkNkkRDjzp5m7IEgAs4fYgSs4BRcGh5bmVUIVxlgCsFT6OrUFEoZ1N3VzRNbF97gBsXexsYxnFpR4z+bzzdUTty0ORxr2ZyEvTO6v7xZOkjbJ5Rk4q4wdbOteV1fcLwQDsUiu+Z8FbRIvYZ3FwTQ4UX5pdZtFBLIF2YZrd4bFBbHLAxT-IgXBHJfKjFGw5BbY6Y-Kg2rE75XRG7Qlgg4XDF0wwtGHgi6DckgOYyGBQADm8CIoAAZgAnCAAWyQZBAOAgSAk5LAzEYjBojHoChgjAACh92IwYGKcP5JTKkKEFUrEOQapbZfaaIqkFZHVLnUtbXLPVbED63YhJP7nSrg+0w0gLr7EJ9o-HXXaAByJqzJpBplROpBbOMATkTKcz9uIxdL5AdOa9yvlwfIoZrAarlab4tr9ozcfICeb4aDdt7ifIJZ7Uf7yu+PaLk5D9btkmrHYDS9LknbIFz9oL683297649c4369KidPcckE5X4bHDcmF+7wckj7n5FjL77t+t+a-fEoPggA
+  \begin{center}
+    \begin{tikzcd}
+      & a \arrow[ld] \arrow[d] &                &  & q_1 \arrow[rd] & q_2 \arrow[d]             &               &                               \\
+    q_1 \arrow[rd] & q_2 \arrow[d]          &                &  & c \arrow[d]    & b \arrow[d] \arrow[rd]    &               &                               \\
+    c \arrow[d]    & b \arrow[d] \arrow[rd] &                &  & q_1 \arrow[rd] & q_2 \arrow[d]             & q_3 \arrow[d] & a \arrow[llldddd] \arrow[ldd] \\
+    q_1 \arrow[rd] & q_2 \arrow[d]          & q_3 \arrow[d]  &  &                & b \arrow[ddd] \arrow[rrd] & d             &                               \\
+      & b \arrow[d] \arrow[rd] & d              &  &                &                           & q_2 \arrow[d] & q_3 \arrow[ld]                \\
+      & q_2 \arrow[d]          & q_3 \arrow[ld] &  &                &                           & e             &                               \\
+      & e                      &                &  & q_1            & q_2                       &               &                              
+    \end{tikzcd}
+  \end{center}
+  Where the left diagram is $D$, with a sequence of transitions $q_1q_2
+  \xrightarrow{b} q_2q_3, \lambda \xrightarrow{c} q_1, q_1q_2 \xrightarrow{b}
+  q_2q_3$, and the right diagram represents the yield of a hyperpath from $K =
+  q_1q_2$ to itself again. Observe that the transitions used are exactly the
+  same as those of $D$ but just rearranged. 
+
+  Similarly if $M$ is cyclic, then there exists a hyperpath $\ppi = (K,K,S)$ yielding a
+  connected DAG fragment $\dd$. We can then `pump' this by traversing the
+  hyperpath multiple times, as we always reach the same set of states. As $\dd$
+  is connected, by repeatedly traversing/pumping the hyperpath $k$ times, we
+  yield a larger connected DAG fragment which we shall denote $\dd^k$. However,
+  this process must also have a way to terminate, i.e yield a rank $(0,0)$ DAG
+  fragment. 
+
+  We claim that this termination process to `tie up' the dangling edges can be
+  done in a manner similar to the above diagram. Since $M$ is reduced, each
+  transition $\tt_i$ is used in some DAG $\dd_i$ for some nonzero weight run
+  $\rho_i$. We can thus construct each of these DAGs $\dd_i$ and remove the node
+  corresponding to the transition $\tt_i$, leaving us with dangling edges
+  corresponding to the left and right hand side states of $\tt_i$. Then, we
+  claim that the set of these (currently disconnected) DAGs $\dd_i$ can be
+  connected with the DAG fragment $\dd$ to yield an overall connected DAG.
+  Hence, we can pump this infinitely to yield infinitely many connected DAGs. 
+
+  Again, we leave this termination process as a conjecture to be formally proved in a future paper. 
+
+\end{proof}
+
+We believe this definition of cyclic automata is equivalent to that of
+\cite{blum2019properties}, as assuming the above conjectures hold, we obtain the
+same result that $M$ is cyclic $\Longleftrightarrow$ $L(M)$ is infinite. 
+
+Note also that if we allow $K = \lambda$, we arrive at the previous result where
+any automaton $M$ with $L(M) \ne \emptyset$ also accepts the infinite language
+${L(M)}^\&$, as we can `pump' any connected DAG $\dd$ to create infinitely many
+disconnected copies. 
+
+\section{Algorithms for Intersection and Union}
+
+In this section we will provide algorithms (and hence constructive proofs) that
+the set of recognisable weighted DAG languages is closed under intersection and
+union. The following algorithms no longer require the automata to be reduced or
+deterministic. 
+
+\subsection{Union}
+Given weighted DAG automata $M_1$ and $M_2$, we define the union of their
+languages $L(M_1)$ and $L(M_2)$, $L = L(M_1) \cup L(M_2)$ such that $L(D) =
+[[M_1]](D) \oplus [[M_2]](D)$. 
+
+The following algorithm computes the union automaton, assuming that $Q_1 \cap
+Q_2 = \emptyset$.
+
+\begin{algorithm}[!h]
+  \caption{$\textsc{Union}(M_1 = \langle \Sigma, Q_1, \Theta_1, \delta_1, \K
+  \rangle, M_2 = \langle \Sigma, Q_2, \Theta_2, \delta_2, \K \rangle)$}
+	\label{alg:union}
+  $Q_M \gets Q_1 \cup Q_2$\\
+  $\Theta_M \gets \Theta_1 \cup \Theta_2$\\
+  $\delta_M \gets \delta_1 \cup \delta_2$\\
+  \Return{$\langle \Sigma, Q_M, \Theta_M, \delta_M, \K\rangle$}
+\end{algorithm}
+
+\begin{theorem}
+  Given $D \in \calD_\Sigma$, weighted DAG automata $M_1$ and $M_2$, $M =
+    \textsc{Union}(M_1, M_2)$ gives us an automaton such that $[[M]](D) =
+    [[M_1]](D) \oplus [[M_2]](D)$.
+\end{theorem}
+
+\begin{proof}
+  Since $Q_1 \cap Q_2 = \emptyset$, we also have $\Theta_1 \cap \Theta_2 =
+  \emptyset$. This means that for any transition $\alpha \xrightarrow{a} \beta
+  \in \Theta_M$, we have $\alpha \in Q_1^* \Longleftrightarrow \beta \in Q_1^*$.
+  This also means that any run $\rho$ with $\delta_M(\rho) \ne \veczero$ must be
+  of the form $\rho: E \rightarrow Q_1$ or $\rho: E \rightarrow Q_2$ and thus we
+  get:
+  
+  \begin{align*}
+    [[M]](D) &= \bigoplus_{\text{all } \rho \text{ on } D} \delta_M(\rho)\\
+    &= \bigoplus_{\rho: E \rightarrow Q_1} \delta_M(\rho) \oplus \bigoplus_{\rho: E \rightarrow Q_2} \delta_M(\rho)\\
+    &= \bigoplus_{\text{all } \rho_1 \text{ on } D} \delta_1(\rho_1) \oplus \bigoplus_{\text{all } \rho_2 \text{ on } D} \delta_2(\rho_2)\\
+    &= [[M_1]](D) \oplus [[M_2]](D)
+  \end{align*}
+\end{proof}
+As the collection of $\rho: E \rightarrow Q_1$ is exactly the set of runs
+$\rho_1$ of $M_1$, and by definition $\delta_M(\alpha \xrightarrow{a} \beta) =
+\delta_1(\alpha \xrightarrow{a} \beta)$ when $\alpha,\beta \in Q_1^*$, hence
+$\delta_M(\rho_1) = \delta_1(\rho_1)$. The case for
+ $\rho: E \rightarrow Q_2$ is symmetric. 
+
+\subsection{Intersection}
+Given weighted DAG automata $M_1$ and $M_2$, we define the intersection of their
+languages $L(M_1), L(M_2)$, $L = L(M_1) \cap L(M_2)$ such that $L(D) = [[M_1]](D) \otimes
+[[M_2]](D)$. 
+
+The following algorithm computes the intersection automaton, assuming that $Q_1 \cap
+Q_2 = \emptyset$.
+
+\begin{algorithm}[!h]
+  \caption{$\textsc{Intersect}(M_1 = \langle \Sigma, Q_1, \Theta_1, \delta_1, \K
+  \rangle, M_2 = \langle \Sigma, Q_2, \Theta_2, \delta_2, \K \rangle)$}
+	\label{alg:naiveintersect}
+  $Q_M \gets Q_1 \times Q_2$\\
+  $\Theta_M \gets \emptyset$\\
+  $\delta_M \gets \veczero$\\
+  \ForEach{$t_1 = q_1q_2\ldots q_{m_1}\xrightarrow{\sigma_1} r_1r_2 \ldots
+  r_{n_1} \in \Theta_1$}{ \ForEach{$t_2 = 
+  q_1'q_2'\ldots q_{m_2}' \xrightarrow{\sigma_2} r_1'r_2'\ldots r_{n_2}' 
+  \in \Theta_2$}{ \If{$m_1 = m_2, n_1 = n_2, \sigma_1 = \sigma_2$}{ 
+    $t_M =
+  (q_1q_1')(q_2q_2') \ldots (q_{m_1}q_{m_2}) \xrightarrow{\sigma_1}
+  (r_1r_1')(r_2r_2') \ldots (r_{n_1}r_{n_2}')$\\
+        $\Theta_M \gets \Theta_M \cup \{t_M\}$\\
+        $\delta_M(t_M) = \delta_1(t_1) \otimes \delta_2(t_2)$\\
+      } } } \Return{$\langle \Sigma, Q_M, \Theta_M, \delta_M, \K\rangle$}
+\end{algorithm}
+
+\begin{theorem}
+    Given $D \in \calD_\Sigma$, weighted DAG automata $M_1$ and $M_2$, $M =
+    \textsc{Intersect}(M_1, M_2)$ gives us an automaton such that $[[M]](D) =
+    [[M_1]](D) \otimes [[M_2]](D)$.
+\end{theorem}
+\begin{proof}
+Let $\rho_M: E \rightarrow Q_M$ be a run of $M$ on $D$. Then, $\rho_{M_1}: E
+\rightarrow Q_1, \rho_{M_1}(e) = \rho_M(e)[0]$ and $\rho_{M_2}: E \rightarrow
+Q_2, \rho_{M_2}(e) = \rho_M(e)[1]$ are runs of $M_1$ and $M_2$ on $D$
+respectively (where $\rho(e)[i]$ refers to the $i$'th element of the tuple
+indexed at 0). 
+
+Defining $t_{1v} =  q_1\ldots q_{m_v} \xrightarrow{lab_V(v)}
+r_1\ldots r_{n_v} = \langle \rho_{M_1}(in(v)), lab_V(v),
+\rho_{M_1}(out(v)) \rangle$ and $t_{2v} =  q_1'\ldots q_{m_v},
+\xrightarrow{lab_V(v)} r_1'\ldots r_{n_v}'  = \langle \rho_{M_2}(in(v)),
+lab_V(v), \rho_{M_2}(out(v)) \rangle$, the run weight of $\rho_M$ is:
+
+\begin{align*}
+  \delta_M(\rho_M) &= \bigotimes_{v \in V} \delta(\langle \rho_M(in(v)), lab_V(v), \rho_M(out(v))\rangle)\\
+  &= \bigotimes_{v \in V} \delta(\langle (q_1q_1')(q_2q_2') \ldots (q_{m_v}q_{m_v}'), lab_V(v), (r_1r_1')(r_2r_2') \ldots (r_{n_v}r_{n_v}')\rangle)\\
+  &= \bigotimes_{v \in V} \delta_1(t_{1v}) \otimes \delta_2(t_{2v}) &&\text{Line 9}\\
+  &= \bigotimes_{v \in V} \delta_1(t_{1v}) \otimes \bigotimes_{v \in V} \delta_2(t_{2v}) = \delta_1(\rho_{M_1}) \otimes \delta_2(\rho_{M_2})\\
+\end{align*}
+
+Note that the second last line is only defined if both $t_{1v}$ and $t_{2v}$ are
+in $\Theta_1$ and $\Theta_2$, but if this is not the case then by definition the
+transition weight is 0. More formally, if one of $t_{iv} \notin \Theta_i$, then
+$\delta_i(\rho_{M_i}) =0$ and $\delta_M(\rho_M) = 0$.
+
+Hence, every run $\rho_M$ of $M$ on $D$ has associated with it two runs,
+$\rho_{M_1}$ of $M_1$ and $\rho_{M_2}$ of $M_2$, such that we can write
+$\delta_M(\rho_M) = \delta_1(\rho_{M_1}) \otimes \delta_2(\rho_{M_2})$ 
+
+Thus, we have:
+\begin{align*}
+  [[M]](D) &= \bigoplus_{\text{all $\rho$ on $D$}} \delta_M(\rho)\\
+  &= \bigoplus_{\rho_{M_1}, \rho_{M_2} \text{ on $D$}} \delta_1(\rho_{M_1}) \otimes \delta_2(\rho_{M_2})\\
+  &= \bigoplus_{\rho_{M_1} \text{ on $D$}} \delta_1(\rho_{M_1}) \otimes \bigoplus_{\rho_{M_2} \text{ on $D$}} \delta_2(\rho_{M_2}) &&\text{by distributivity}\\
+  &= [[M_1]](D) \otimes [[M_2]](D)
+\end{align*}
+\end{proof}
+
+\section{Conclusions and Future Work}
+In this paper we have examined properties of DAG automata, providing definitions
+and properties in line with those of string and tree automata. Specifically, we
+have given a more formal definition of a partial weight and graph contexts, and thus proved
+correctness of the recognition algorithm presented in \cite{chiang2018weighted}.
+We then provided an alternative definition of unweighted state equivalence in
+terms of the hypergraph representation of an automaton, which may be a useful
+perspective from which to derive a definition of weighted equivalence (e.g by
+comparing the weights of the generated graph fragments for two equivalent
+states). We also provide a definition of cyclic automata, again based on the
+hypergraph representation and a conjecture that an automaton being cyclic means
+its language of connected DAGs is infinite. Finally, we provided algorithmic proofs of
+closure under weighted union and intersection, a simple generalisation of the
+techniques used for weighted string and tree automata.  
+
+We believe that there is significant potential for future work in this area. For
+instance, concepts of weighted equivalence, Myhill-Nerode theorems, and weight
+pushing can be investigated. Hopefully, this would lead to algorithms for weighted determinisation and
+weighted minimisation. 
+
+Training algorithms for weighted DAG automata also represent a valuable area of
+research, given the existence of training/weight learning algorithms for string
+and tree automata.
+
+Graph grammars are also a well studied topic, gaining traction after the seminal
+paper \cite{drewes1997hyperedge} introducting hyperedge replacement graph
+grammars. The connection between graph grammars (perhaps the node replacement
+variant as described in \cite{rozenberg1997handbook}) and DAG automata may also
+be worth exploring, especially the relationship with our definition of graph contexts.
+
+
+\bibliography{custom}
+\bibliographystyle{acl_natbib}
+
+\appendix
+\section{Appendix: External Algorithms and Definitions}
+\subsection{Recognition/Graph Weight Computation Algorithm} 
+
+We present this algorithm as specified in \cite{chiang2018weighted}. $star(v)$
+represents the set of incoming and outgoing edges from (super)vertex $v$. $f|_I$
+is the function $f$ restricted to edges in set $I$. 
+
+\begin{algorithm*}[H]
+  \caption{$[[M]](D)$ Computation}
+  \label{alg:chiangrecognition}
+  \ForEach{node $v$}{
+    \ForAll{$f:star(v) \rightarrow Q$}{
+      $\aalpha[v,f] \gets \delta(\langle f[in(v)], lab(v), f[out(v)]\rangle)$\\
+    }
+  }
+  \ForEach{edge $e$ in order, s.t. $e$ has not been deleted}{
+    $(u,v)\gets (src(e), tar(e))$\\
+    $I \gets star(u) \cap star(v)$\\
+    Create new supervertex $z$\\
+    $in(z) \gets in(u) \cup in(v) \setminus I$\\
+    $out(z) \gets out(u) \cup out(v) \setminus I$\\
+    \ForAll{$h:star(z) \rightarrow Q$}{
+      $\aalpha[z,h] \gets 0$\\
+    }
+    \ForAll{$f:star(u) \rightarrow Q$}{
+      \ForAll{$g:star(v) \rightarrow Q$ s.t. $f|_I = g|_I$}{
+        $h = f \cup g \setminus f|_I$\\
+        $\aalpha[z,h] \gets \aalpha[z,h] \oplus\aalpha[u,f] \otimes \aalpha[v,g]$\\
+      }
+    }
+    Delete $u,v$ and all edges in $I$\\
+  }
+  One supervertex $v$ remains\\
+  \Return{$\aalpha[v,\emptyset]$}
+\end{algorithm*}
+
+
+\subsection{State Equivalence}
+We present the definition of equivalent/distinguishable states as specified in
+\cite{blum2019properties}.
+
+\begin{definition}[Distinguishable State Pair]
+  Let $A=(Q,\Sigma, \Theta)$ be a reduced top down deterministic DAG automaton.
+  The set of all distinguishable state pairs is defined inductively as the
+  smallest symmetric binary relation $\Delta_A \subseteq Q^2$ such that $(p,p')
+  \in \Delta_A$ if there exists $\sigma \in \Sigma$ and $\alpha, \alpha' \in
+  Q^*$ such that one of the following hold:
+  \begin{enumerate}
+    \item $\Theta$ contains a rule $\alpha p \alpha' \xrightarrow{\sigma} ...$
+    but no rule $\alpha p' \alpha' \xrightarrow{\sigma} ...$
+    \item There are rules $\alpha p \alpha' \xrightarrow{\sigma} q_1\cdots q_n$
+    and $\alpha p' \alpha' \xrightarrow{\sigma} q_1'\cdots q_n'$ in $\Theta$
+    such that $(q_j,q_j') \in \Delta_A$ for some $j \in [n]$.
+  \end{enumerate}
+\end{definition}
+
+\begin{definition}[Equivalent States]
+  States $p,p' \in Q$ are equivalent, $p\equiv p'$ if $(p,p') \notin \Delta_A$.
+\end{definition}
+
+\section{Appendix: Unfinished Work (DAG Grammars)}
+\subsection{Weighted Order Preserving DAG Grammars}
+\subsubsection{Graph Definition}
+\begin{definition}[Hyperedge Labelled, Directed Hypergraph]
+  \label{def:grammargraph}
+  Let $(\Sigma, rank)$ be a ranked alphabet. A directed, hyperedge labeled
+  hypergraph over $\Sigma$ is a graph $G = (V, E, src, tar)$ alongside a
+  labelling function $lab_E$. $lab_E: E \rightarrow \Sigma$ is a labelling of
+  the edges such that $rank(lab(e)) = |tar(e)|$ for $e \in E$, i.e the rank of
+  an edge's label corresponds to the number of targets.  We will express such
+  graphs as tuples $(V, E, src, tar, lab_E)$.
+\end{definition}
+  
+Let $\calA_\Sigma$ be the set of all hyperedge labelled DAGs over ranked
+alphabet $\Sigma$.
+
+\begin{definition}[Marked Hypergraph]
+  \label{def:markedhypergraph}
+  A marked hyperedge labelled, directed hypergraph is a tuple $G =
+  (V,E,src,tar,lab_E,X)$ where $(V,E,src,tar,lab_E)$ forms a graph as in
+  Definition \ref{def:grammargraph} and $X \in V^\circledast$ is a nonempty
+  sequence called the \textit{marking} of $G$, and whose nodes are referred to
+  as \textit{external nodes}. As $X$ is nonempty, we can write it as $X = (v,w)$
+  where $v \in V$ and $w \in V^\circledast$ and say that $v = root(G)$, $w =
+  ext(G)$. 
+\end{definition}
+    
+
+\subsubsection{Preliminaries}
+Let $D = (V,E,src,tar,lab_E)$ be a DAG as per Definition \ref{def:grammargraph},
+and $u,v \in V$. An edge $e$ is a \textit{common ancestor edge} of $u$ and $v$
+if there exists $t, t' \in tar(e)$ such that $u$ is a descendant of $t$ and $v$
+is a descendant of $t'$. An edge $e$ is the \textit{closest common ancestor
+edge} of $u$ and $v$ if there is no other common ancestor edge $e'$ such that
+$src(e') \in tar(e)$. Note: a pair of nodes may have more than one closest
+common ancestor edge in a DAG. 
+
+\begin{definition}[Partial Order on Leaves of DAG]
+    Let $D = (V,E,src,tar,lab_E)$ be a DAG. We say that $u \preceq_D v$ for $u,v
+    \in V$ if for every closest common ancestor edge $e$ of $u$ and $v$, the
+    sequence $tar(e)$ can be written as $wtw'$ where $w,w' \in V^\circledast$
+    and $t\in V$ such that $t$ is an ancestor of $u$ and any ancestors of $v$
+    are in $tw'$. 
+\end{definition}
+\begin{claim}
+For DAG $D$, the transitive closure of $\preceq_D$ forms a partial order on the
+leaves of $D$.
+\end{claim}
+\begin{proof} The relation is reflexive as the closest common ancestor edges of
+a node $u$ and itself are the set of incoming edges to $u$, and the targets of
+such an edge $e$ can be written $wuw'$. To show antisymmetry, assume that $u
+\preceq_D u'$ and $u' \preceq_D u$ for $u,u' \in V$. Then, it must be the case
+that for any closest common ancestor edge $e$, $tar(e) = w_1tw_1' = w_2t'w_2'$,
+where $t,t'$ are ancestors of $u,u'$ respectively, and $t' \in tw_1'$ and $t \in
+t'w_2'$. However, this is only possible if $t = t'$, and since $e$ by assumption
+is a closest common ancestor, $t = t' \Longleftrightarrow u = u'$. 
+
+Note that we need to take the transitive closure as $\preceq_D$ is not
+necessarily transitive on its own - consider $u \preceq_D u'$, $u' \preceq_D
+u''$ for $u,u',u'' \in V$ but $u$ and $u''$ do not share a common ancestor edge. 
+\end{proof}
+
+\subsubsection{Definition}
+A (weighted) order preserving DAG grammar is a structure $H = (\Sigma, N, P, S,
+w, \K)$ where:
+\begin{itemize}
+    \item $\Sigma$ is a ranked alphabet of terminal symbols
+    \item $N$ is a ranked alphabet of nonterminal symbols
+    \item $P$ is a set of production rules
+    \item $S \in N$ is the starting nonterminal. We define $S^\bullet$ as the
+    starting graph with a single edge labelled by $S$ connecting a marked source
+    node $v_0$ to $k=rank(S)$ marked targets $v_1,v_2,\ldots v_k$. 
+    \item $\K$ is a commutative semiring
+    \item $w: P \rightarrow \K$ is a weight function
+\end{itemize}
+
+The rules in $P$ must be of the form $A \rightarrow F$ where $A \in N$ and $F$
+is a marked DAG with $|ext(F)| = rank(A)$ that obeys one of the following forms:
+\begin{enumerate}
+    \item $F$ contains just two edges $e_1, e_2$ both labelled with $A$,
+    $src(e_1) = src(e_2)$, $tar(e_1) = tar(e_2)$. Further, all nodes are marked
+    ($V = \{x \in X\}$) and connected to the two edges. This is called a
+    \textit{clone} rule.
+    \item $F$ has height at most 2, and obeys the following:
+    \begin{itemize}
+        \item All nodes have out degree at most one.
+        \item There is a single root node, which is the marked $v = root(F)$,
+        and the single edge $e$ with $src(e) = v$ is labelled by a terminal
+        symbol. 
+        \item Every other edge is labelled with a nonterminal symbol.
+        \item Only leaves have in-degrees larger than one.
+        \item All targets of nonterminal edges have either in-degree larger than
+        one or are marked nodes.
+        \item $\preceq_F$ gives a total ordering of the leaves and $ext(F)$
+        respects this ordering (i.e the sequence $ext(F)$ is in `increasing'
+        order with respect to $\preceq_F$). 
+    \end{itemize}
+\end{enumerate}
+
+These restrictions are harsh but are ensure polynomial parsing.
+\citeauthor{ericson1opdl} show how relaxing some of these restrictions leads to
+an NP-Complete membership problem, but a full characterisation of strictly
+necessary restrictions for polynomial parsing remains an open issue. 
+
+A derivation step of $H$ on graph $G$, given rule $\rho = A \rightarrow F$,
+takes an edge $e \in E_G$ labelled with $A$ and replaces it with the marked DAG
+$F$. $src(e)$ is identified with $root(F)$, and the length $k = rank(A)$
+sequence $tar(e)$ is identified with the sequence $ext(F)$ (i'th node of
+$tar(e)$ is i'th node of $ext(F)$).  If $G'$ is the resultant graph, we say $G
+\Rightarrow_\rho G'$. We write $\Rightarrow_H^*$ to denote the reflexive
+transitive closure of $\Rightarrow$, such that $G \Rightarrow_H^* G'$ if $G'$
+can be derived in zero or more derivation steps using rules of $H$. 
+
+We denote by $L(H)$ the \textbf{language} of grammar $H$, where $L(H) = \{g \in
+\calA_\Sigma \, | \, S^\bullet \Rightarrow_H^* g \}$, i.e the set of terminal
+labelled graphs generated from the starting graph.
+
+In the weighted case, we also overload the weight function to define the
+\textbf{derivation weight} of a derivation $\tt = S^\bullet \Rightarrow_{p_0}
+G_0 \Rightarrow_{p_1} G_1 \ldots \Rightarrow_{p_k} G_k$ as:
+\[
+    w(\tt) = \bigotimes_i w(p_i)
+\]
+
+The \textbf{graph weight} of $D \in \calA_\Sigma$ under WOPDG $H$, denoted by
+$\calS_H$ is:
+
+\[
+    \calS_H(D) = \bigoplus_{\text{all distinct $\tt$}} w(\tt)
+\]
+Where two derivations are distinct if their independent derivation steps cannot
+be reordered to be the same. Two derivation steps $p_1,p_2$ are independent if
+for $G, G'$ such that $G \Rightarrow_{p_1} G_1 \Rightarrow_{p_2} G'$, we also
+have $G \Rightarrow_{p_2} G_2 \Rightarrow_{p_1} G'$. 
+
+
+\end{document}
